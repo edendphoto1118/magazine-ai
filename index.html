@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 雜誌封面生成器</title>
+    <title>AI Magazine Cover | Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     
@@ -14,118 +16,141 @@
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
     <style>
-        /* 自定義字體樣式 */
-        .font-bodoni { font-family: 'Bodoni Moda', serif; }
-        .font-cinzel { font-family: 'Cinzel', serif; }
-        .font-sans { font-family: 'Inter', sans-serif; }
+        /* 雜誌感字體定義 */
+        .font-magazine-main { font-family: 'Bodoni Moda', serif; }
+        .font-magazine-sub { font-family: 'Cinzel', serif; }
+        .font-ui { font-family: 'Inter', sans-serif; }
+
+        /* 隱藏滾動條但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 玻璃擬態 (Glassmorphism) */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
         
         /* 載入動畫 */
         .loader {
-            border: 3px solid #f3f3f3;
+            width: 20px; height: 20px;
+            border: 2px solid #000;
+            border-bottom-color: transparent;
             border-radius: 50%;
-            border-top: 3px solid #000;
-            width: 24px;
-            height: 24px;
-            -webkit-animation: spin 1s linear infinite; /* Safari */
-            animation: spin 1s linear infinite;
+            animation: rotation 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans min-h-screen">
+<body class="bg-[#F2F2F2] text-gray-900 font-ui h-screen overflow-hidden flex flex-col items-center justify-center">
 
-    <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
-        
-        <header class="mb-8 flex items-center justify-between">
-            <h1 class="text-2xl font-bold tracking-tight">MAGAZINE <span class="text-gray-400">MAKER AI</span></h1>
-            <div v-if="loading" class="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                <div class="loader"></div>
-                <span>{{ loadingText }}</span>
+    <div id="app" class="relative w-full h-full flex flex-col items-center">
+
+        <nav class="fixed top-0 z-50 w-full px-6 py-4 flex justify-between items-center bg-transparent pointer-events-none">
+            <div class="pointer-events-auto bg-black text-white px-4 py-1.5 rounded-full text-xs font-bold tracking-widest shadow-lg">
+                MAGAZINE.AI
             </div>
-        </header>
-
-        <div class="flex flex-col lg:flex-row gap-8">
             
-            <div class="w-full lg:w-1/3 bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit space-y-6">
-                
-                <div>
-                    <label class="block text-sm font-semibold mb-2">1. 上傳照片 (自動去背)</label>
-                    <div class="relative border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-800 transition-colors p-8 text-center cursor-pointer bg-gray-50">
-                        <input type="file" @change="handleFileUpload" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                        <span class="text-gray-500 text-sm" v-if="!originalImage">點擊上傳圖片</span>
-                        <span class="text-green-600 text-sm font-medium" v-else>圖片已載入</span>
-                    </div>
-                </div>
+            <button @click="download" :disabled="!imageLoaded" 
+                class="pointer-events-auto flex items-center gap-2 bg-black text-white px-5 py-2 rounded-full font-medium text-sm shadow-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <i data-lucide="download" class="w-4 h-4"></i> 匯出封面
+            </button>
+        </nav>
 
-                <div>
-                    <label class="block text-sm font-semibold mb-2">2. 封面文字</label>
-                    <div class="space-y-3">
-                        <input v-model="title" type="text" class="w-full border rounded px-3 py-2 text-lg font-bold" placeholder="主標題 (例如 VOGUE)">
-                        <input v-model="subtitle" type="text" class="w-full border rounded px-3 py-2 text-sm" placeholder="副標題 (例如 DESIGN ISSUE)">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="text-xs text-gray-400">標題色</label>
-                                <input v-model="titleColor" type="color" class="w-full h-10 rounded cursor-pointer">
-                            </div>
-                            <div>
-                                <label class="text-xs text-gray-400">副標色</label>
-                                <input v-model="subtitleColor" type="color" class="w-full h-10 rounded cursor-pointer">
-                            </div>
-                        </div>
-                    </div>
+        <main class="flex-1 w-full flex items-center justify-center p-4 relative">
+            
+            <div v-if="!imageLoaded" class="text-center space-y-4 animate-fade-in">
+                <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-gray-400">
+                    <i data-lucide="image-plus" class="w-8 h-8 text-gray-400"></i>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-semibold mb-2">3. 樣式調整</label>
-                    <div class="flex gap-2 mb-4">
-                        <button @click="toggleDepth" :class="{'bg-black text-white': enableDepth, 'bg-gray-200': !enableDepth}" class="flex-1 py-2 rounded text-sm transition-colors">
-                            人物遮擋文字 (AI)
-                        </button>
-                    </div>
-                    
-                    <button @click="downloadImage" :disabled="!originalImage" class="w-full bg-black text-white py-3 rounded hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
-                        下載封面
-                    </button>
-                </div>
-
+                <h2 class="text-xl font-bold text-gray-700">建立你的第一本雜誌封面</h2>
+                <p class="text-gray-500 text-sm">支援智慧去背與景深效果</p>
+                <label class="cursor-pointer inline-flex items-center gap-2 bg-black text-white px-6 py-3 rounded-full hover:scale-105 transition-transform shadow-lg mt-4">
+                    <span>選擇照片</span>
+                    <input type="file" @change="handleUpload" accept="image/*" class="hidden">
+                </label>
             </div>
 
-            <div class="flex-1 bg-gray-200 rounded-xl flex items-center justify-center p-8 overflow-hidden min-h-[600px]">
+            <div v-show="imageLoaded" class="relative shadow-2xl transition-all duration-300 ease-in-out transform"
+                 :class="{'scale-95': isMenuOpen, 'scale-100': !isMenuOpen}"
+                 style="aspect-ratio: 3/4; height: 80vh; max-height: 800px; background: white;"
+                 ref="canvasRef">
                 
-                <div v-if="!originalImage" class="text-gray-400 text-center">
-                    <p>請先在左側上傳圖片</p>
-                </div>
+                <img :src="originalImage" class="absolute inset-0 w-full h-full object-cover z-0" crossorigin="anonymous">
 
-                <div v-show="originalImage" ref="canvasRef" class="relative bg-white shadow-2xl overflow-hidden" style="width: 100%; max-width: 500px; aspect-ratio: 3/4;">
+                <div class="absolute inset-0 z-10 flex flex-col justify-between p-8 pointer-events-none">
                     
-                    <img :src="originalImage" class="absolute inset-0 w-full h-full object-cover z-0">
-
-                    <div class="absolute inset-0 z-10 flex flex-col items-center pt-12 pointer-events-none p-6">
-                        <div class="w-full flex justify-between text-[10px] tracking-[0.2em] font-bold mb-2 border-b border-white/40 pb-2" :style="{ color: subtitleColor }">
-                            <span>ISSUE 25</span>
-                            <span>TW / 2026</span>
+                    <div class="flex flex-col items-center pt-4">
+                        <div class="w-full flex justify-between text-[10px] tracking-[0.3em] font-bold border-b border-white/40 pb-2 mb-2" :style="{ color: textColor }">
+                            <span>VOL.26</span>
+                            <span>{{ currentDate }}</span>
                         </div>
-
-                        <h1 class="font-bodoni text-[90px] md:text-[110px] leading-[0.8] font-bold mix-blend-overlay opacity-90 text-center tracking-tighter" 
-                            :style="{ color: titleColor }">
+                        
+                        <h1 class="font-magazine-main text-[13vh] leading-[0.8] tracking-tighter text-center mix-blend-overlay opacity-90 transition-colors duration-300"
+                            :style="{ color: mainColor }">
                             {{ title }}
                         </h1>
-
-                        <h2 class="mt-4 text-xl tracking-[0.3em] font-cinzel text-center backdrop-blur-sm bg-white/10 px-4 py-1" 
-                            :style="{ color: subtitleColor }">
+                        
+                        <h2 class="mt-4 text-sm md:text-lg tracking-[0.4em] font-magazine-sub text-center backdrop-blur-md bg-white/10 px-6 py-1 rounded-sm transition-colors duration-300"
+                            :style="{ color: textColor }">
                             {{ subtitle }}
                         </h2>
                     </div>
 
-                    <img v-if="cutoutImage && enableDepth" :src="cutoutImage" class="absolute inset-0 w-full h-full object-cover z-20 pointer-events-none">
-
-                    <div class="absolute inset-0 z-30 pointer-events-none mix-blend-overlay opacity-20 bg-gradient-to-tr from-black via-transparent to-white"></div>
+                    <div class="flex justify-between items-end opacity-80" :style="{ color: textColor }">
+                        <div class="text-[10px] space-y-1">
+                            <p class="font-bold">EXCLUSIVE</p>
+                            <p class="w-24 leading-tight opacity-70">Architecture & Design Monthly Issue.</p>
+                        </div>
+                        <div class="h-8 w-24 bg-current" style="mask: repeating-linear-gradient(90deg, black, black 2px, transparent 2px, transparent 4px); -webkit-mask: repeating-linear-gradient(90deg, black, black 2px, transparent 2px, transparent 4px);"></div>
+                    </div>
                 </div>
 
+                <img v-if="depthEffect && cutoutImage" :src="cutoutImage" class="absolute inset-0 w-full h-full object-cover z-20 pointer-events-none" crossorigin="anonymous">
+                
+                <div class="absolute inset-0 z-30 pointer-events-none opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+
             </div>
+        </main>
+
+        <div v-if="imageLoaded" class="fixed bottom-6 z-40 w-full max-w-md px-4">
+            <div class="glass rounded-2xl p-4 shadow-2xl flex flex-col gap-4 animate-slide-up">
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <input v-model="title" type="text" class="bg-gray-50/50 border-0 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-black outline-none" placeholder="主標題">
+                    <input v-model="subtitle" type="text" class="bg-gray-50/50 border-0 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black outline-none" placeholder="副標題">
+                </div>
+
+                <div class="flex items-center justify-between gap-4">
+                    
+                    <div class="flex items-center gap-2">
+                        <div class="relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:scale-110 transition-transform">
+                            <input v-model="mainColor" type="color" class="absolute -top-2 -left-2 w-12 h-12 cursor-pointer p-0 border-0">
+                        </div>
+                        <div class="relative w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:scale-110 transition-transform">
+                            <input v-model="textColor" type="color" class="absolute -top-2 -left-2 w-12 h-12 cursor-pointer p-0 border-0">
+                        </div>
+                    </div>
+
+                    <button @click="toggleDepth" 
+                        class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all"
+                        :class="depthEffect ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'">
+                        <span v-if="processing" class="loader border-gray-400 border-t-transparent w-4 h-4"></span>
+                        <span v-else>{{ depthEffect ? '✨ 景深開啟' : '景深關閉' }}</span>
+                    </button>
+
+                    <label class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 cursor-pointer transition-colors">
+                        <i data-lucide="image-plus" class="w-5 h-5 text-gray-600"></i>
+                        <input type="file" @change="handleUpload" accept="image/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="statusMsg" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-full text-xs backdrop-blur-md z-50 transition-opacity">
+            {{ statusMsg }}
         </div>
 
     </div>
@@ -133,76 +158,125 @@
     <script type="module">
         import imglyRemoveBackground from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/+esm";
 
-        const { createApp, ref } = Vue;
+        const { createApp, ref, computed, nextTick, onMounted } = Vue;
 
         createApp({
             setup() {
-                const title = ref('ARCH');
-                const subtitle = ref('THE FUTURE OF LIVING');
-                const titleColor = ref('#ffffff');
-                const subtitleColor = ref('#ffffff');
+                // 資料狀態
+                const title = ref('VOGUE');
+                const subtitle = ref('ARCHITECTURAL DIGEST');
+                const mainColor = ref('#ffffff');
+                const textColor = ref('#ffffff');
                 const originalImage = ref(null);
                 const cutoutImage = ref(null);
-                const loading = ref(false);
-                const loadingText = ref('');
-                const enableDepth = ref(true);
+                const imageLoaded = ref(false);
+                const depthEffect = ref(false); // 預設關閉，讓使用者自己開，體驗會比較順
+                const processing = ref(false);
+                const statusMsg = ref('');
                 const canvasRef = ref(null);
 
-                const handleFileUpload = async (event) => {
+                // 計算當前日期
+                const currentDate = computed(() => {
+                    const date = new Date();
+                    return `${date.toLocaleString('default', { month: 'short' }).toUpperCase()} ${date.getFullYear()}`;
+                });
+
+                // 工具：顯示狀態訊息
+                const showStatus = (msg, duration = 3000) => {
+                    statusMsg.value = msg;
+                    if (duration) setTimeout(() => statusMsg.value = '', duration);
+                };
+
+                // 處理上傳
+                const handleUpload = async (event) => {
                     const file = event.target.files[0];
                     if (!file) return;
 
-                    // 1. 顯示原始圖
+                    // 重置狀態
                     originalImage.value = URL.createObjectURL(file);
-                    cutoutImage.value = null; // 重置
+                    cutoutImage.value = null;
+                    imageLoaded.value = true;
+                    depthEffect.value = false; // 上傳新圖時先關閉景深
                     
-                    // 2. 開始 AI 去背
-                    loading.value = true;
-                    loadingText.value = 'AI 正在下載模型並分析圖片 (首次較慢)...';
-                    
-                    try {
-                        // 使用 CDN 版本的 imgly
-                        // 注意：這裡需要指定 publicPath 讓它去 CDN 抓模型數據
-                        const config = {
-                            publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/'
-                        };
+                    showStatus('圖片載入成功，點擊「景深」按鈕可啟動 AI');
+                };
 
-                        const blob = await imglyRemoveBackground(originalImage.value, config);
-                        cutoutImage.value = URL.createObjectURL(blob);
-                        loadingText.value = '完成！';
-                        setTimeout(() => loading.value = false, 1000);
-                    } catch (error) {
-                        console.error(error);
-                        loadingText.value = 'AI 處理失敗，請重試';
-                        setTimeout(() => loading.value = false, 3000);
+                // 切換景深 (觸發 AI)
+                const toggleDepth = async () => {
+                    // 如果已經有去背圖，單純開關顯示
+                    if (cutoutImage.value) {
+                        depthEffect.value = !depthEffect.value;
+                        return;
+                    }
+
+                    // 如果要開啟但沒有圖，開始運算
+                    if (!depthEffect.value && !cutoutImage.value) {
+                        processing.value = true;
+                        showStatus('AI 正在分析圖片結構 (首次需下載模型約 10秒)...', 0);
+
+                        try {
+                            const config = {
+                                publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/',
+                                debug: false,
+                                progress: (key, current, total) => {
+                                    // 可以在這裡做進度條
+                                }
+                            };
+                            
+                            // 執行去背
+                            const blob = await imglyRemoveBackground(originalImage.value, config);
+                            cutoutImage.value = URL.createObjectURL(blob);
+                            depthEffect.value = true;
+                            showStatus('AI 處理完成！文字已置於後方');
+                        } catch (error) {
+                            console.error(error);
+                            showStatus('AI 處理失敗 (可能是網路或圖片格式問題)，已切換回普通模式');
+                            depthEffect.value = false;
+                        } finally {
+                            processing.value = false;
+                        }
                     }
                 };
 
-                const toggleDepth = () => {
-                    enableDepth.value = !enableDepth.value;
+                // 下載圖片
+                const download = async () => {
+                    if (!canvasRef.value) return;
+                    showStatus('正在生成高解析度圖片...', 0);
+                    
+                    // 等待 UI 渲染完成
+                    await nextTick();
+
+                    try {
+                        const canvas = await html2canvas(canvasRef.value, {
+                            scale: 2.5, // 2.5倍解析度
+                            useCORS: true, // 關鍵：允許跨域
+                            allowTaint: true,
+                            backgroundColor: null,
+                            logging: false
+                        });
+                        
+                        const link = document.createElement('a');
+                        link.download = `cover-${Date.now()}.png`;
+                        link.href = canvas.toDataURL('image/png', 1.0);
+                        link.click();
+                        showStatus('下載完成！');
+                    } catch (err) {
+                        console.error(err);
+                        showStatus('下載失敗，請截圖保存');
+                    }
                 };
 
-                const downloadImage = () => {
-                    if (!canvasRef.value) return;
-                    
-                    html2canvas(canvasRef.value, {
-                        scale: 2, // 提高解析度
-                        useCORS: true,
-                        backgroundColor: null
-                    }).then(canvas => {
-                        const link = document.createElement('a');
-                        link.download = 'magazine-cover.png';
-                        link.href = canvas.toDataURL('image/png');
-                        link.click();
-                    });
-                };
+                // 初始化圖標
+                onMounted(() => {
+                    lucide.createIcons();
+                });
 
                 return {
-                    title, subtitle, titleColor, subtitleColor,
-                    originalImage, cutoutImage,
-                    loading, loadingText,
-                    enableDepth, toggleDepth,
-                    handleFileUpload, downloadImage, canvasRef
+                    title, subtitle, mainColor, textColor,
+                    originalImage, cutoutImage, imageLoaded,
+                    depthEffect, processing, statusMsg,
+                    currentDate, canvasRef,
+                    handleUpload, toggleDepth, download
                 };
             }
         }).mount('#app');
